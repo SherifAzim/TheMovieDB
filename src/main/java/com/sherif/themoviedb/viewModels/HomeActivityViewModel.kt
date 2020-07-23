@@ -8,15 +8,19 @@ import com.sherif.themoviedb.models.TopRatedMovies
 import com.sherif.themoviedb.utils.APIs
 import com.sherif.themoviedb.utils.ClientProvider
 import com.sherif.themoviedb.utils.Constants
+import io.reactivex.Observable
+import io.reactivex.Single
+import io.reactivex.SingleEmitter
+import io.reactivex.SingleSource
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.AsyncSubject
 
 class HomeActivityViewModel : ViewModel() {
 
     private val callClient: APIs = ClientProvider.getClient(Constants.BASE_URL)
     val topRatedMoviesList: MutableLiveData<TopRatedMovies> = MutableLiveData<TopRatedMovies>()
-    lateinit var topRatedListObserver: io.reactivex.Observable<TopRatedMovies>
 
 
     fun callTokenRequestApi() {
@@ -53,41 +57,38 @@ class HomeActivityViewModel : ViewModel() {
 
     }
 
-    fun callTopRatedMoviesApi() {
 
-        Log.d("ViewModel", "callTopRatedMoviesApi called")
-        val topRatedMoviesCall =
-                callClient.getTopRatedMovies(Constants.APIKEY, Constants.LANG, 1, "")
+    fun callTopRatedMoviesApi(): AsyncSubject<TopRatedMovies> {
 
-        this.topRatedListObserver = topRatedMoviesCall
+       // Log.d("ViewModel", "callTopRatedMoviesApi called")
 
-        val s = topRatedMoviesCall.subscribeOn(Schedulers.newThread())
+        val topRatedListObservable: AsyncSubject<TopRatedMovies> = AsyncSubject.create()
 
+
+        val disposable = callClient.getTopRatedMovies(Constants.APIKEY, Constants.LANG, 1, "")
+                .subscribeOn(Schedulers.newThread())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                        object : io.reactivex.Observer<TopRatedMovies> {
-                            override fun onComplete() {
-                                Log.d("ViewModel", "onComplete called")
-                            }
+                .subscribe({ response ->
+                    //onNext
+                  //  Log.d("ViewModel", "response = ${response.results[0].original_title}")
 
-                            override fun onNext(response: TopRatedMovies) {
+                    //update UI using LiveData
+                    //topRatedMoviesList.value = response
 
-
-                                Log.d("ViewModel", "response = ${response.results.get(0).original_title}")
-                                topRatedMoviesList.value = response
-
-
-                            }
-
-                            override fun onError(e: Throwable) {
-                                e.stackTrace
-                            }
-
-                            override fun onSubscribe(d: Disposable) {
-
-                            }
+                    //update UI using rxjava single observable
+                    topRatedListObservable.onNext(response)
+                },
+                        { e ->
+                            //onError
+                            e.stackTrace
+                        },
+                        {
+                            //onComplete
+                           // Log.d("ViewModel", "onComplete called");
+                            topRatedListObservable.onComplete()
                         })
 
+        return topRatedListObservable
 
     }
 
